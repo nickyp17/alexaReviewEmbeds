@@ -2,8 +2,7 @@ import pandas as pd
 import cohere
 import numpy as np
 from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
-
+from sklearn.cluster import KMeans
 
 
 print("\nGetting reviews from tsv")
@@ -20,4 +19,8 @@ embeds = co.embed(
 
 embeds_array = np.array(embeds.embeddings)
 tsne = TSNE(n_components=2, perplexity=9.0)
-vectors_2s = tsne.fit_transform(embeds_array)
+two_d_vectors = tsne.fit_transform(embeds_array)
+
+kmeans = KMeans(n_clusters=5)
+
+label = kmeans.fit_predict(two_d_vectors)
