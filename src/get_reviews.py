@@ -3,7 +3,7 @@ import cohere
 import numpy as np
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
-
+import matplotlib.pyplot as plt
 
 print("\nGetting reviews from tsv")
 reviews_df = pd.read_table('amazon_reviews.tsv')
@@ -24,3 +24,9 @@ two_d_vectors = tsne.fit_transform(embeds_array)
 kmeans = KMeans(n_clusters=5)
 
 label = kmeans.fit_predict(two_d_vectors)
+
+filtered_label = two_d_vectors[label == 0]
+
+plt.gcf().canvas.get_renderer()
+plt.scatter(filtered_label[:, 0], filtered_label[:, 1])
+plt.show()
