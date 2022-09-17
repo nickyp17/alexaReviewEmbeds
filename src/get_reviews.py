@@ -1,32 +1,30 @@
-import pandas as pd
 import cohere
-import numpy as np
-from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
-print("\nGetting reviews from tsv")
-reviews_df = pd.read_table('amazon_reviews.tsv')
-review_list = list(reviews_df.verified_reviews)[0:10]
-print("\n\tSize of reviews list: ", len(review_list))
-
-print("\nGetting cohere embed for each review")
+reviews = pd.read_table('amazon_reviews.tsv')
+review_list = list(reviews)
 co = cohere.Client('QFBgGBv3qZJdCdYH5zVZvF0sbwC8Ma1r7xsWjZEJ')
-embeds = co.embed(
+embed = co.embed(
     model='cohere-toxicity',
     texts=review_list
 )
+embed_array = np.array(embed.embeddings)
 
-embeds_array = np.array(embeds.embeddings)
-tsne = TSNE(n_components=2, perplexity=9.0)
-two_d_vectors = tsne.fit_transform(embeds_array)
+pca = PCA(2)
 
-kmeans = KMeans(n_clusters=5)
+df = pca.fit_transform(embed_array)
 
-label = kmeans.fit_predict(two_d_vectors)
+kmeans = KMeans(n_clusters=10)
 
-filtered_label = two_d_vectors[label == 0]
+label = kmeans.fit_predict(df)
 
-plt.gcf().canvas.get_renderer()
-plt.scatter(filtered_label[:, 0], filtered_label[:, 1])
+unique_labels = np.unique(label)
+
+for i in unique_labels:
+    plt.scatter(df[label == i, 0], df[label == i, 1], label=i)
+plt.legend()
 plt.show()
