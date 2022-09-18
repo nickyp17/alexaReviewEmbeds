@@ -46,88 +46,89 @@ class reviewNode:
         self.coord = coord
 
 
-getReviews()
+if __name__ == "__main__":
+    # scrape amazon reviews
+    getReviews()
+    if not exists("amazonscraper/reviews.csv"):
+        print("Error: no reviews.csv found. Most probably, rate limited by amazon.")
+        exit(1)
+    numClusters = 8
+    # Load Data
+    reviews_df = pd.read_csv('amazonscraper/reviews.csv', na_values=" NaN")
+    review_list = list(reviews_df.dropna().comment)[0:500]
+    review_list = [x.replace('\n', '')
+                   for x in review_list if len(x.split(' ')) > 10]
 
-# if __name__ == "__main__":
-#     # scrape amazon reviews
-#     getReviews()
-#     numClusters = 8
-#     # Load Data
-#     reviews_df = pd.read_csv('amazonscraper/reviews.csv', na_values=" NaN")
-#     review_list = list(reviews_df.dropna().comment)[0:500]
-#     review_list = [x.replace('\n', '')
-#                    for x in review_list if len(x.split(' ')) > 10]
+    co = cohere.Client('QFBgGBv3qZJdCdYH5zVZvF0sbwC8Ma1r7xsWjZEJ')
+    embeds = co.embed(model='cohere-toxicity', texts=review_list)
+    embeds = np.array(embeds.embeddings)
 
-#     co = cohere.Client('QFBgGBv3qZJdCdYH5zVZvF0sbwC8Ma1r7xsWjZEJ')
-#     embeds = co.embed(model='cohere-toxicity', texts=review_list)
-#     embeds = np.array(embeds.embeddings)
+    pca = PCA(2)
 
-#     pca = PCA(2)
+    # Transform the data
+    df = pca.fit_transform(embeds)
+    reviewNodes = []
+    for i in range(0, len(df)):
+        reviewNodes.append(reviewNode(review_list[i], df[i]))
+    # for i in reviewNodes:
+    #   print(i.text + " " + str(i.coord))
 
-#     # Transform the data
-#     df = pca.fit_transform(embeds)
-#     reviewNodes = []
-#     for i in range(0, len(df)):
-#         reviewNodes.append(reviewNode(review_list[i], df[i]))
-#     # for i in reviewNodes:
-#     #   print(i.text + " " + str(i.coord))
+    # Initialize the class object
+    kmeans = KMeans(n_clusters=numClusters)
 
-#     # Initialize the class object
-#     kmeans = KMeans(n_clusters=numClusters)
+    # predict the labels of clusters.
+    label = kmeans.fit_predict(df)
 
-#     # predict the labels of clusters.
-#     label = kmeans.fit_predict(df)
+    # Getting unique labels
+    u_labels = np.unique(label)
 
-#     # Getting unique labels
-#     u_labels = np.unique(label)
+    text_df = pd.DataFrame({"text": x.text} for x in reviewNodes)
 
-#     text_df = pd.DataFrame({"text": x.text} for x in reviewNodes)
+    review_label_df = pd.DataFrame({
+        "text": x.text,
+        "coords": x.coord
+    } for x in reviewNodes)
 
-#     review_label_df = pd.DataFrame({
-#         "text": x.text,
-#         "coords": x.coord
-#     } for x in reviewNodes)
+    all_label_coords = pd.DataFrame(columns=['coords', 'label'])
 
-#     all_label_coords = pd.DataFrame(columns=['coords', 'label'])
+    for i in u_labels:
+        coords = df[label == i]
+        x = pd.DataFrame({"coords": x, "label": i} for x in coords)
 
-#     for i in u_labels:
-#         coords = df[label == i]
-#         x = pd.DataFrame({"coords": x, "label": i} for x in coords)
+        all_label_coords = pd.concat([all_label_coords, x])
 
-#         all_label_coords = pd.concat([all_label_coords, x])
+    all_label_coords.coords = all_label_coords.coords.apply(tuple)
+    review_label_df.coords = review_label_df.coords.apply(tuple)
 
-#     all_label_coords.coords = all_label_coords.coords.apply(tuple)
-#     review_label_df.coords = review_label_df.coords.apply(tuple)
+    review_label_df = pd.merge(review_label_df,
+                               all_label_coords,
+                               on='coords',
+                               how='outer')
 
-#     review_label_df = pd.merge(review_label_df,
-#                                all_label_coords,
-#                                on='coords',
-#                                how='outer')
+    # print(review_label_df)
 
-#     # print(review_label_df)
+    # print([c for c in review_label_df['text']])
+    labelInfo = dict()
+    for i in u_labels:
+        x = review_label_df.loc[review_label_df["label"] == i]
+        prompt_feed = [c for c in x.text]
+        pf_final = structurePrompt(prompt_feed)
+        print(pf_final)
 
-#     # print([c for c in review_label_df['text']])
-#     labelInfo = dict()
-#     for i in u_labels:
-#         x = review_label_df.loc[review_label_df["label"] == i]
-#         prompt_feed = [c for c in x.text]
-#         pf_final = structurePrompt(prompt_feed)
-#         print(pf_final)
+        try:
+            tldr = generateTldr(pf_final)
+        except CohereError:
+            pf_final = structurePrompt(prompt_feed[::10])
+            tldr = generateTldr(pf_final)
 
-#         try:
-#             tldr = generateTldr(pf_final)
-#         except CohereError:
-#             pf_final = structurePrompt(prompt_feed[::10])
-#             tldr = generateTldr(pf_final)
+        print(str(i) + " " + str(tldr))
 
-#         print(str(i) + " " + str(tldr))
+        labelInfo[i] = tldr[:-3].replace(" The general consensus is that ", "")
 
-#         labelInfo[i] = tldr[:-3].replace(" The general consensus is that ", "")
+    print(labelInfo)
 
-#     print(labelInfo)
+    for i in u_labels:
+        plt.scatter(df[label == i, 0], df[label == i, 1], label=labelInfo[i])
 
-#     for i in u_labels:
-#         plt.scatter(df[label == i, 0], df[label == i, 1], label=labelInfo[i])
-
-#     plt.legend(bbox_to_anchor=(1.1, 1.05))
-#     plt.show()
+    plt.legend(bbox_to_anchor=(1.1, 1.05))
+    plt.show()
