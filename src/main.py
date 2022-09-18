@@ -10,16 +10,16 @@ from os.path import exists
 
 
 def getReviews():
-    if not exists("reviews.csv"):
-        subprocess.run("scrapy runspider scraper.py -o reviews.csv",
+    if not exists("amazonscraper/reviews.csv"):
+        usrInp = input("Enter amazon link: >")
+        subprocess.run(f"scrapy crawl amazonbot -a url='{usrInp})'",
                        shell=True)
 
 
 def generateTldr(s_prompt):
     response = co.generate(
         model='large',
-        prompt=
-        'Review: You\'d think if you advertised a USB-C charged power bank that you could at least include a usb-c charging cable. included micro USB is just a cheap-out at this point. . capacity\'s fine, functionality is fine, build quality... feels a little less than i expected of Anker.\nReview: Went to charge it again and it wouldn’t charge. I attempted multiple outlets, charging wires, and chargers but it wouldn’t charge. Reached out to customer service and they claim that I am a week out of the warranty and they are unable to help me. I loved anker but I won’t be returning as a customer.\nReview: I got this charger for Christmas. It wasn\'t charging very fast (almost like a tickle charge). I did some research and I found using the USBC cable had it completely charged in a matter of hours. I get 8 charges on a full battery for my phone. A family member had her own pocket juice but kept \"\"stealing\"\" this one, as it charged her phone quickly and could get more uses out of the Anker. I purchased one for her as well and she loves it. The only draw back is it does not come with a usbc cable.\n\nTLDR: The general consensus is that that the device has charging issues.\n--\nReview: Very flimsy material and runs about 2 sizes SMALL.\nReview: It’s paper thin and zero cotton . Horrible material\nReview: Wasn’t sure how heavy the cloth would be, it turned out to be thinner and lighter but with enough body to be comfortable. Colors are good for a print.\n\nTLDR: The general consensus is the material is cheap, but the design printed well.\n--\n'
+        prompt='Review: You\'d think if you advertised a USB-C charged power bank that you could at least include a usb-c charging cable. included micro USB is just a cheap-out at this point. . capacity\'s fine, functionality is fine, build quality... feels a little less than i expected of Anker.\nReview: Went to charge it again and it wouldn’t charge. I attempted multiple outlets, charging wires, and chargers but it wouldn’t charge. Reached out to customer service and they claim that I am a week out of the warranty and they are unable to help me. I loved anker but I won’t be returning as a customer.\nReview: I got this charger for Christmas. It wasn\'t charging very fast (almost like a tickle charge). I did some research and I found using the USBC cable had it completely charged in a matter of hours. I get 8 charges on a full battery for my phone. A family member had her own pocket juice but kept \"\"stealing\"\" this one, as it charged her phone quickly and could get more uses out of the Anker. I purchased one for her as well and she loves it. The only draw back is it does not come with a usbc cable.\n\nTLDR: The general consensus is that that the device has charging issues.\n--\nReview: Very flimsy material and runs about 2 sizes SMALL.\nReview: It’s paper thin and zero cotton . Horrible material\nReview: Wasn’t sure how heavy the cloth would be, it turned out to be thinner and lighter but with enough body to be comfortable. Colors are good for a print.\n\nTLDR: The general consensus is the material is cheap, but the design printed well.\n--\n'
         + s_prompt,
         max_tokens=50,
         temperature=0.8,
@@ -46,85 +46,88 @@ class reviewNode:
         self.coord = coord
 
 
-if __name__ == "__main__":
-    # scrape amazon reviews
-    getReviews()
-    numClusters = 8
-    # Load Data
-    reviews_df = pd.read_csv('reviews.csv', na_values=" NaN")
-    review_list = list(reviews_df.dropna().comment)[0:500]
-    review_list = [x.replace('\n', '') for x in review_list if len(x.split(' ')) > 10]
+getReviews()
 
-    co = cohere.Client('QFBgGBv3qZJdCdYH5zVZvF0sbwC8Ma1r7xsWjZEJ')
-    embeds = co.embed(model='cohere-toxicity', texts=review_list)
-    embeds = np.array(embeds.embeddings)
+# if __name__ == "__main__":
+#     # scrape amazon reviews
+#     getReviews()
+#     numClusters = 8
+#     # Load Data
+#     reviews_df = pd.read_csv('amazonscraper/reviews.csv', na_values=" NaN")
+#     review_list = list(reviews_df.dropna().comment)[0:500]
+#     review_list = [x.replace('\n', '')
+#                    for x in review_list if len(x.split(' ')) > 10]
 
-    pca = PCA(2)
+#     co = cohere.Client('QFBgGBv3qZJdCdYH5zVZvF0sbwC8Ma1r7xsWjZEJ')
+#     embeds = co.embed(model='cohere-toxicity', texts=review_list)
+#     embeds = np.array(embeds.embeddings)
 
-    # Transform the data
-    df = pca.fit_transform(embeds)
-    reviewNodes = []
-    for i in range(0, len(df)):
-        reviewNodes.append(reviewNode(review_list[i], df[i]))
-    # for i in reviewNodes:
-    #   print(i.text + " " + str(i.coord))
+#     pca = PCA(2)
 
-    # Initialize the class object
-    kmeans = KMeans(n_clusters=numClusters)
+#     # Transform the data
+#     df = pca.fit_transform(embeds)
+#     reviewNodes = []
+#     for i in range(0, len(df)):
+#         reviewNodes.append(reviewNode(review_list[i], df[i]))
+#     # for i in reviewNodes:
+#     #   print(i.text + " " + str(i.coord))
 
-    # predict the labels of clusters.
-    label = kmeans.fit_predict(df)
+#     # Initialize the class object
+#     kmeans = KMeans(n_clusters=numClusters)
 
-    # Getting unique labels
-    u_labels = np.unique(label)
+#     # predict the labels of clusters.
+#     label = kmeans.fit_predict(df)
 
-    text_df = pd.DataFrame({"text": x.text} for x in reviewNodes)
+#     # Getting unique labels
+#     u_labels = np.unique(label)
 
-    review_label_df = pd.DataFrame({
-                                       "text": x.text,
-                                       "coords": x.coord
-                                   } for x in reviewNodes)
+#     text_df = pd.DataFrame({"text": x.text} for x in reviewNodes)
 
-    all_label_coords = pd.DataFrame(columns=['coords', 'label'])
+#     review_label_df = pd.DataFrame({
+#         "text": x.text,
+#         "coords": x.coord
+#     } for x in reviewNodes)
 
-    for i in u_labels:
-        coords = df[label == i]
-        x = pd.DataFrame({"coords": x, "label": i} for x in coords)
+#     all_label_coords = pd.DataFrame(columns=['coords', 'label'])
 
-        all_label_coords = pd.concat([all_label_coords, x])
+#     for i in u_labels:
+#         coords = df[label == i]
+#         x = pd.DataFrame({"coords": x, "label": i} for x in coords)
 
-    all_label_coords.coords = all_label_coords.coords.apply(tuple)
-    review_label_df.coords = review_label_df.coords.apply(tuple)
+#         all_label_coords = pd.concat([all_label_coords, x])
 
-    review_label_df = pd.merge(review_label_df,
-                               all_label_coords,
-                               on='coords',
-                               how='outer')
+#     all_label_coords.coords = all_label_coords.coords.apply(tuple)
+#     review_label_df.coords = review_label_df.coords.apply(tuple)
 
-    # print(review_label_df)
+#     review_label_df = pd.merge(review_label_df,
+#                                all_label_coords,
+#                                on='coords',
+#                                how='outer')
 
-    # print([c for c in review_label_df['text']])
-    labelInfo = dict()
-    for i in u_labels:
-        x = review_label_df.loc[review_label_df["label"] == i]
-        prompt_feed = [c for c in x.text]
-        pf_final = structurePrompt(prompt_feed)
-        print(pf_final)
+#     # print(review_label_df)
 
-        try:
-            tldr = generateTldr(pf_final)
-        except CohereError:
-            pf_final = structurePrompt(prompt_feed[::10])
-            tldr = generateTldr(pf_final)
+#     # print([c for c in review_label_df['text']])
+#     labelInfo = dict()
+#     for i in u_labels:
+#         x = review_label_df.loc[review_label_df["label"] == i]
+#         prompt_feed = [c for c in x.text]
+#         pf_final = structurePrompt(prompt_feed)
+#         print(pf_final)
 
-        print(str(i) + " " + str(tldr))
+#         try:
+#             tldr = generateTldr(pf_final)
+#         except CohereError:
+#             pf_final = structurePrompt(prompt_feed[::10])
+#             tldr = generateTldr(pf_final)
 
-        labelInfo[i] = tldr[:-3].replace(" The general consensus is that ", "")
+#         print(str(i) + " " + str(tldr))
 
-    print(labelInfo)
+#         labelInfo[i] = tldr[:-3].replace(" The general consensus is that ", "")
 
-    for i in u_labels:
-        plt.scatter(df[label == i, 0], df[label == i, 1], label=labelInfo[i])
+#     print(labelInfo)
 
-    plt.legend(bbox_to_anchor=(1.1, 1.05))
-    plt.show()
+#     for i in u_labels:
+#         plt.scatter(df[label == i, 0], df[label == i, 1], label=labelInfo[i])
+
+#     plt.legend(bbox_to_anchor=(1.1, 1.05))
+#     plt.show()
